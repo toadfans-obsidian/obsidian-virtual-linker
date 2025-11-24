@@ -6,7 +6,7 @@ import { LinkerMetaInfoFetcher } from './linkerInfo';
 export class ExternalUpdateManager {
     registeredCallbacks: Set<Function> = new Set();
 
-    constructor() { }
+    constructor() {}
 
     registerCallback(callback: Function) {
         this.registeredCallbacks.add(callback);
@@ -395,7 +395,8 @@ export class PrefixTree {
 
     resetSearch() {
         // this._current = this.root;
-        this._currentNodes = [new VisitedPrefixNode(this.root)];
+        // Start with true for startedAtWordBeginning since the beginning of text is a word boundary
+        this._currentNodes = [new VisitedPrefixNode(this.root, true, true)];
     }
 
     pushChar(char: string) {
@@ -406,7 +407,10 @@ export class PrefixTree {
         chars.forEach((c) => {
             // char = char.toLowerCase();
             const isBoundary = PrefixTree.checkWordBoundary(c);
-            if (this.settings.matchAnyPartsOfWords || isBoundary || this.settings.matchEndOfWords) {
+
+            // Always start a new match at word boundaries when we need whole word matching
+            // or when matching partial words
+            if (this.settings.matchAnyPartsOfWords || isBoundary) {
                 // , this.settings.wordBoundaryRegex
                 newNodes.push(new VisitedPrefixNode(this.root, true, isBoundary));
             }
@@ -456,7 +460,10 @@ export class PrefixTree {
         // \p{C}: Other (control chars, unassigned, etc.).
 
         // let pattern = /[\p{P}\p{Z}\p{S}\p{C}\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
-        let pattern = /[^\p{L}]/u;
+
+        // Modified: Treat letters, numbers, dash, underscore, dot, and slash as part of words
+        // Only true word boundaries are spaces, punctuation (except -_./), etc.
+        let pattern = /[^\p{L}\p{N}_\-\.\/]/u;
 
         // if (regexString) {
         //     if (typeof regexString !== 'string') {
@@ -486,7 +493,7 @@ export class PrefixTree {
 }
 
 export class CachedFile {
-    constructor(public mtime: number, public file: TFile, public aliases: string[], public tags: string[]) { }
+    constructor(public mtime: number, public file: TFile, public aliases: string[], public tags: string[]) {}
 }
 
 export class LinkerCache {

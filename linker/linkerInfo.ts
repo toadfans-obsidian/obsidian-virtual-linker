@@ -24,7 +24,7 @@ export class LinkerFileMetaInfo {
             .map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
 
         this.includeFile = this.tags.includes(settings.tagToIncludeFile);
-        this.excludeFile = this.tags.includes(settings.tagToExcludeFile);
+        this.excludeFile = this.tags.includes(settings.tagToExcludeFile) || this.tags.includes('headingable');
 
         this.includeAllFiles = fetcher.includeAllFiles;
         this.isInIncludedDir = fetcher.includeDirPattern.test(this.file.path); //fetcher.includeAllFiles || 

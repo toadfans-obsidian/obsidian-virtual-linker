@@ -100,13 +100,33 @@ export class GlossaryLinker extends MarkdownRenderChild {
                                     currentNodes.forEach((node) => {
                                         // Check if we want to include this note based on the settings
                                         if (!this.settings.matchAnyPartsOfWords) {
-                                            if (
-                                                this.settings.matchBeginningOfWords &&
-                                                !node.startsAtWordBoundary &&
-                                                this.settings.matchEndOfWords &&
-                                                !isWordBoundary
-                                            ) {
-                                                return;
+                                            // If both matchBeginningOfWords and matchEndOfWords are false, only match whole words
+                                            if (!this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                                // Must start at word boundary AND end at word boundary
+                                                if (!node.startsAtWordBoundary || !isWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If only matchBeginningOfWords is enabled
+                                            else if (this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                                // Must start at word boundary
+                                                if (!node.startsAtWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If only matchEndOfWords is enabled
+                                            else if (!this.settings.matchBeginningOfWords && this.settings.matchEndOfWords) {
+                                                // Must end at word boundary
+                                                if (!isWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If both are enabled, match beginning or end of words
+                                            else {
+                                                // Must start at word boundary OR end at word boundary
+                                                if (!node.startsAtWordBoundary && !isWordBoundary) {
+                                                    return;
+                                                }
                                             }
                                         }
 
