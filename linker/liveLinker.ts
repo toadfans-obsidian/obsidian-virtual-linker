@@ -23,7 +23,7 @@ function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number 
 
 function getFileForEditorView(app: App, editorView: EditorView): TFile | null {
     const editorDom = editorView.dom;
-    for (const leaf of app.workspace.getLeavesOfType("markdown")) {
+    for (const leaf of app.workspace.getLeavesOfType('markdown')) {
         const view = leaf.view;
         if (view instanceof MarkdownView) {
             // Try to find a descendant of the MarkdownView's contentEl that matches the EditorView's dom
@@ -118,10 +118,8 @@ class AutoLinkerPlugin implements PluginValue {
             return builder.finish();
         }
 
-
         const mappedFile = getFileForEditorView(this.app, view);
-        if (!mappedFile)
-            return builder.finish();
+        if (!mappedFile) return builder.finish();
 
         // Check if the file is inside excluded folders
         const excludedFolders = this.settings.excludedDirectoriesForLinking;
@@ -163,11 +161,33 @@ class AutoLinkerPlugin implements PluginValue {
                         for (const node of currentNodes) {
                             // Check if we want to include this note based on the settings
                             if (!this.settings.matchAnyPartsOfWords) {
-                                if (
-                                    (this.settings.matchBeginningOfWords && !node.startsAtWordBoundary) &&
-                                    (this.settings.matchEndOfWords && !isWordBoundary)
-                                ) {
-                                    continue;
+                                // If both matchBeginningOfWords and matchEndOfWords are false, only match whole words
+                                if (!this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                    // Must start at word boundary AND end at word boundary
+                                    if (!node.startsAtWordBoundary || !isWordBoundary) {
+                                        continue;
+                                    }
+                                }
+                                // If only matchBeginningOfWords is enabled
+                                else if (this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                    // Must start at word boundary
+                                    if (!node.startsAtWordBoundary) {
+                                        continue;
+                                    }
+                                }
+                                // If only matchEndOfWords is enabled
+                                else if (!this.settings.matchBeginningOfWords && this.settings.matchEndOfWords) {
+                                    // Must end at word boundary
+                                    if (!isWordBoundary) {
+                                        continue;
+                                    }
+                                }
+                                // If both are enabled, match beginning or end of words
+                                else {
+                                    // Must start at word boundary OR end at word boundary
+                                    if (!node.startsAtWordBoundary && !isWordBoundary) {
+                                        continue;
+                                    }
                                 }
                             }
 
@@ -182,7 +202,17 @@ class AutoLinkerPlugin implements PluginValue {
                             // console.log("MATCH", name, aFrom, aTo, node.caseIsMatched, node.requiresCaseMatch)
 
                             matches.push(
-                                new VirtualMatch(id++, name, this.app, aFrom, aTo, Array.from(node.files), isAlias, !isWordBoundary, this.settings)
+                                new VirtualMatch(
+                                    id++,
+                                    name,
+                                    this.app,
+                                    aFrom,
+                                    aTo,
+                                    Array.from(node.files),
+                                    isAlias,
+                                    !isWordBoundary,
+                                    this.settings
+                                )
                             );
                         }
                     }

@@ -48,6 +48,36 @@ export class GlossaryLinker extends MarkdownRenderChild {
         return currentPath;
     }
 
+    /**
+     * Check if a node should be skipped based on its ancestor elements.
+     * Returns true if the node is inside an excluded ancestor tag (like <code>)
+     * or if any ancestor has one of the excluded classes.
+     */
+    shouldSkipNode(node: Node): boolean {
+        let current = node.parentElement;
+        const excludedTags = this.settings.excludedAncestorTags || [];
+        const excludedClasses = this.settings.excludedAncestorClasses || [];
+        
+        while (current) {
+            // Check if current element's tag is in the excluded list
+            const tagName = current.tagName.toLowerCase();
+            if (excludedTags.includes(tagName)) {
+                return true;
+            }
+            
+            // Check if current element has any of the excluded classes
+            for (const excludedClass of excludedClasses) {
+                if (current.classList.contains(excludedClass)) {
+                    return true;
+                }
+            }
+            
+            current = current.parentElement;
+        }
+        
+        return false;
+    }
+
     onload() {
         if (!this.settings.linkerActivated) {
             return;
@@ -81,6 +111,11 @@ export class GlossaryLinker extends MarkdownRenderChild {
                         let text = childNode.textContent || '';
                         if (text.length === 0) continue;
 
+                        // Check if the text node is inside an excluded ancestor
+                        if (this.shouldSkipNode(childNode)) {
+                            continue;
+                        }
+
                         this.linkerCache.reset();
                         let matches: VirtualMatch[] = [];
 
@@ -100,13 +135,33 @@ export class GlossaryLinker extends MarkdownRenderChild {
                                     currentNodes.forEach((node) => {
                                         // Check if we want to include this note based on the settings
                                         if (!this.settings.matchAnyPartsOfWords) {
-                                            if (
-                                                this.settings.matchBeginningOfWords &&
-                                                !node.startsAtWordBoundary &&
-                                                this.settings.matchEndOfWords &&
-                                                !isWordBoundary
-                                            ) {
-                                                return;
+                                            // If both matchBeginningOfWords and matchEndOfWords are false, only match whole words
+                                            if (!this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                                // Must start at word boundary AND end at word boundary
+                                                if (!node.startsAtWordBoundary || !isWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If only matchBeginningOfWords is enabled
+                                            else if (this.settings.matchBeginningOfWords && !this.settings.matchEndOfWords) {
+                                                // Must start at word boundary
+                                                if (!node.startsAtWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If only matchEndOfWords is enabled
+                                            else if (!this.settings.matchBeginningOfWords && this.settings.matchEndOfWords) {
+                                                // Must end at word boundary
+                                                if (!isWordBoundary) {
+                                                    return;
+                                                }
+                                            }
+                                            // If both are enabled, match beginning or end of words
+                                            else {
+                                                // Must start at word boundary OR end at word boundary
+                                                if (!node.startsAtWordBoundary && !isWordBoundary) {
+                                                    return;
+                                                }
                                             }
                                         }
 

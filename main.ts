@@ -44,6 +44,8 @@ export interface LinkerPluginSettings {
     includeAliases: boolean;
     alwaysShowMultipleReferences: boolean;
     clickIconConvertsToRealLink: boolean;
+    excludedAncestorClasses: string[];
+    excludedAncestorTags: string[];
     // wordBoundaryRegex: string;
     // conversionFormat
 }
@@ -85,6 +87,8 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     includeAliases: true,
     alwaysShowMultipleReferences: false,
     clickIconConvertsToRealLink: false,
+    excludedAncestorClasses: ['github-link-preview'],
+    excludedAncestorTags: ['code'],
     // wordBoundaryRegex: '/[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u',
 };
 
@@ -171,14 +175,14 @@ export default class LinkerPlugin extends Plugin {
                 // Find all virtual links in the selection
                 const virtualLinks = Array.from(selectionRange.querySelectorAll('.virtual-link-a'))
                     .filter((link): link is HTMLElement => link instanceof HTMLElement)
-                    .map(link => ({
+                    .map((link) => ({
                         element: link,
                         from: parseInt(link.getAttribute('from') || '-1'),
                         to: parseInt(link.getAttribute('to') || '-1'),
                         text: link.getAttribute('origin-text') || '',
-                        href: link.getAttribute('href') || ''
+                        href: link.getAttribute('href') || '',
                     }))
-                    .filter(link => {
+                    .filter((link) => {
                         const linkFrom = editor.offsetToPos(link.from);
                         const linkTo = editor.offsetToPos(link.to);
                         return this.isPosWithinRange(linkFrom, linkTo, from, to);
@@ -188,7 +192,7 @@ export default class LinkerPlugin extends Plugin {
                 if (virtualLinks.length === 0) return;
 
                 // Process all links in a single operation
-                const replacements: { from: number, to: number, text: string }[] = [];
+                const replacements: { from: number; to: number; text: string }[] = [];
 
                 for (const link of virtualLinks) {
                     const targetFile = this.app.vault.getAbstractFileByPath(link.href);
@@ -198,10 +202,8 @@ export default class LinkerPlugin extends Plugin {
                     const activeFilePath = activeFile?.path ?? '';
 
                     let absolutePath = targetFile.path;
-                    let relativePath = path.relative(
-                        path.dirname(activeFilePath),
-                        path.dirname(absolutePath)
-                    ) + '/' + path.basename(absolutePath);
+                    let relativePath =
+                        path.relative(path.dirname(activeFilePath), path.dirname(absolutePath)) + '/' + path.basename(absolutePath);
                     relativePath = relativePath.replace(/\\/g, '/');
 
                     const replacementPath = this.app.metadataCache.fileToLinktext(targetFile, activeFilePath);
@@ -228,19 +230,15 @@ export default class LinkerPlugin extends Plugin {
                     if (replacementPath === link.text && linkFormat === 'shortest') {
                         replacement = `[[${replacementPath}]]`;
                     } else {
-                        const path = linkFormat === 'shortest' ? shortestPath :
-                            linkFormat === 'relative' ? relativePath :
-                                absolutePath;
+                        const path = linkFormat === 'shortest' ? shortestPath : linkFormat === 'relative' ? relativePath : absolutePath;
 
-                        replacement = useMarkdownLinks ?
-                            `[${link.text}](${path})` :
-                            `[[${path}|${link.text}]]`;
+                        replacement = useMarkdownLinks ? `[${link.text}](${path})` : `[[${path}|${link.text}]]`;
                     }
 
                     replacements.push({
                         from: link.from,
                         to: link.to,
-                        text: replacement
+                        text: replacement,
                     });
                 }
 
@@ -250,9 +248,8 @@ export default class LinkerPlugin extends Plugin {
                     const toPos = editor.offsetToPos(replacement.to);
                     editor.replaceRange(replacement.text, fromPos, toPos);
                 }
-            }
+            },
         });
-
     }
 
     private isPosWithinRange(
@@ -262,10 +259,8 @@ export default class LinkerPlugin extends Plugin {
         selectionTo: EditorPosition
     ): boolean {
         return (
-            (linkFrom.line > selectionFrom.line ||
-                (linkFrom.line === selectionFrom.line && linkFrom.ch >= selectionFrom.ch)) &&
-            (linkTo.line < selectionTo.line ||
-                (linkTo.line === selectionTo.line && linkTo.ch <= selectionTo.ch))
+            (linkFrom.line > selectionFrom.line || (linkFrom.line === selectionFrom.line && linkFrom.ch >= selectionFrom.ch)) &&
+            (linkTo.line < selectionTo.line || (linkTo.line === selectionTo.line && linkTo.ch <= selectionTo.ch))
         );
     }
 
@@ -310,9 +305,7 @@ export default class LinkerPlugin extends Plugin {
                 if (from === -1 || to === -1) {
                     menu.addItem((item) => {
                         // Item to convert a virtual link to a real link
-                        item.setTitle(
-                            '[Virtual Linker] Converting link is not here.'
-                        ).setIcon('link');
+                        item.setTitle('[Virtual Linker] Converting link is not here.').setIcon('link');
                     });
                 }
                 // Check, if the element has the "virtual-link" class
@@ -497,7 +490,7 @@ export default class LinkerPlugin extends Plugin {
         }
     }
 
-    onunload() { }
+    onunload() {}
 
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -767,15 +760,16 @@ class LinkerSettingTab extends PluginSettingTab {
                     })
                 );
 
-
-
             // Text setting for property name to exclude specific texts
             new Setting(containerEl)
                 .setName('Property name to exclude specific texts')
-                .setDesc('By adding this property to a note, containing a list of names, the linker will exclude the specified names / aliases from being matched.')
+                .setDesc(
+                    'By adding this property to a note, containing a list of names, the linker will exclude the specified names / aliases from being matched.'
+                )
                 .addTextArea((text) => {
-                    text.setValue(this.plugin.settings.propertyNameToExcludeTexts)
-                        .onChange(async (value) => { this.plugin.settings.propertyNameToExcludeTexts = value });
+                    text.setValue(this.plugin.settings.propertyNameToExcludeTexts).onChange(async (value) => {
+                        this.plugin.settings.propertyNameToExcludeTexts = value;
+                    });
                 });
 
             // Text setting for property name to match case
@@ -926,13 +920,71 @@ class LinkerSettingTab extends PluginSettingTab {
                     // Set default size
                     text.inputEl.addClass('linker-settings-text-box');
                 });
+
+            // Setting for excluded ancestor classes
+            new Setting(containerEl)
+                .setName('Excluded ancestor classes')
+                .setDesc(
+                    'CSS classes that should exclude virtual links from being created. If an element has any of these classes, virtual links will not be created within it. (separated by new lines)'
+                )
+                .addTextArea((text) => {
+                    let setValue = '';
+                    try {
+                        setValue = this.plugin.settings.excludedAncestorClasses.join('\n');
+                    } catch (e) {
+                        console.warn(e);
+                    }
+
+                    text.setPlaceholder('List of CSS class names (separated by new line)')
+                        .setValue(setValue)
+                        .onChange(async (value) => {
+                            this.plugin.settings.excludedAncestorClasses = value
+                                .split('\n')
+                                .map((x) => x.trim())
+                                .filter((x) => x.length > 0);
+                            await this.plugin.updateSettings();
+                        });
+
+                    // Set default size
+                    text.inputEl.addClass('linker-settings-text-box');
+                });
+
+            // Setting for excluded ancestor tags
+            new Setting(containerEl)
+                .setName('Excluded ancestor tags')
+                .setDesc(
+                    'HTML tags that should exclude virtual links from being created. If an element is inside any of these tags, virtual links will not be created within it. (separated by new lines, use lowercase tag names like "code")'
+                )
+                .addTextArea((text) => {
+                    let setValue = '';
+                    try {
+                        setValue = this.plugin.settings.excludedAncestorTags.join('\n');
+                    } catch (e) {
+                        console.warn(e);
+                    }
+
+                    text.setPlaceholder('List of HTML tag names (separated by new line)')
+                        .setValue(setValue)
+                        .onChange(async (value) => {
+                            this.plugin.settings.excludedAncestorTags = value
+                                .split('\n')
+                                .map((x) => x.trim().toLowerCase())
+                                .filter((x) => x.length > 0);
+                            await this.plugin.updateSettings();
+                        });
+
+                    // Set default size
+                    text.inputEl.addClass('linker-settings-text-box');
+                });
         }
 
         new Setting(containerEl).setName('Link style').setHeading();
 
         new Setting(containerEl)
             .setName('Always show multiple references')
-            .setDesc('If toggled, if there are multiple matching notes, all references are shown behind the match. If not toggled, the references are only shown if hovering over the match.')
+            .setDesc(
+                'If toggled, if there are multiple matching notes, all references are shown behind the match. If not toggled, the references are only shown if hovering over the match.'
+            )
             .addToggle((toggle) =>
                 toggle.setValue(this.plugin.settings.alwaysShowMultipleReferences).onChange(async (value) => {
                     // console.log("Always show multiple references: " + value);
@@ -984,7 +1036,6 @@ class LinkerSettingTab extends PluginSettingTab {
                 })
             );
 
-
         // Toggle setting if a click on the icon should convert to real link
         new Setting(containerEl)
             .setName('Click on icon converts to real link')
@@ -1028,7 +1079,6 @@ class LinkerSettingTab extends PluginSettingTab {
 }
 
 export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstractFile, app: App, settings: LinkerPluginSettings) {
-
     // Get from and to position from the element
     const from = parseInt(targetElement.getAttribute('from') || '-1');
     const to = parseInt(targetElement.getAttribute('to') || '-1');
@@ -1039,7 +1089,7 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
     }
 
     // Get the shown text
-    const text = targetElement.getAttribute('origin-text') || '';;
+    const text = targetElement.getAttribute('origin-text') || '';
     const activeFile = app.workspace.getActiveFile();
     const activeFilePath = activeFile?.path ?? '';
 
@@ -1049,11 +1099,8 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
     }
 
     let absolutePath = targetFile.path;
-    let relativePath = path.relative(path.dirname(activeFile.path), path.dirname(absolutePath)) +
-        '/' +
-        path.basename(absolutePath);
+    let relativePath = path.relative(path.dirname(activeFile.path), path.dirname(absolutePath)) + '/' + path.basename(absolutePath);
     relativePath = relativePath.replace(/\\/g, '/'); // Replace backslashes with forward slashes
-
 
     // Problem: we cannot just take the fileToLinktext result, as it depends on the app settings
     const replacementPath = app.metadataCache.fileToLinktext(targetFile as TFile, activeFilePath);
@@ -1065,13 +1112,9 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
     // let shortestPath = shortestFile?.path == target.path ? lastPart : replacementPath;
     let shortestPath = shortestFile?.path == targetFile.path ? lastPart : absolutePath;
 
-    const useMarkdownLinks = settings.useDefaultLinkStyleForConversion
-        ? settings.defaultUseMarkdownLinks
-        : settings.useMarkdownLinks;
+    const useMarkdownLinks = settings.useDefaultLinkStyleForConversion ? settings.defaultUseMarkdownLinks : settings.useMarkdownLinks;
 
-    const linkFormat = settings.useDefaultLinkStyleForConversion
-        ? settings.defaultLinkFormat
-        : settings.linkFormat;
+    const linkFormat = settings.useDefaultLinkStyleForConversion ? settings.defaultLinkFormat : settings.linkFormat;
 
     // Remove superfluous .md extension
     if (!replacementPath.endsWith('.md') && !useMarkdownLinks) {
@@ -1099,7 +1142,7 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
     let replacement = '';
 
     // If the file is the same as the shown text, and we can use short links, we use them
-    if (replacementPath === text && linkFormat === 'shortest') {
+    if (replacementPath.toUpperCase() === text.toUpperCase() && linkFormat === 'shortest') {
         replacement = `[[${replacementPath}]]`;
     }
 
@@ -1116,8 +1159,7 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
 
     // Replace the text
     const activeView = app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView)
-        return;
+    if (!activeView) return;
     const editor = activeView.editor;
     const fromEditorPos = editor.offsetToPos(from);
     const toEditorPos = editor.offsetToPos(to);
@@ -1133,5 +1175,4 @@ export function convertToRealLink(targetElement: HTMLElement, targetFile: TAbstr
     //     editor.scrollTo(scrollPos.left, scrollPos.top);
     // };
     setTimeout(() => editor.scrollTo(scrollPos.left, scrollPos.top), 100);
-
-};
+}
