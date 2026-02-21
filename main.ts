@@ -105,9 +105,9 @@ export default class LinkerPlugin extends Plugin {
         });
 
         // Register the glossary linker for the read mode
-        this.registerMarkdownPostProcessor((element, context) => {
-            context.addChild(new GlossaryLinker(this.app, this.settings, context, element));
-        });
+        // this.registerMarkdownPostProcessor((element, context) => {
+        //     context.addChild(new GlossaryLinker(this.app, this.settings, context, element));
+        // });
 
         // Register the live linker for the live edit mode
         this.registerEditorExtension(liveLinkerPlugin(this.app, this.settings, this.updateManager));

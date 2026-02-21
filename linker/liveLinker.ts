@@ -120,11 +120,17 @@ class AutoLinkerPlugin implements PluginValue {
 
         const mappedFile = getFileForEditorView(this.app, view);
         if (!mappedFile) return builder.finish();
+        const path = mappedFile?.parent?.path ?? this.app.workspace.getActiveFile()?.parent?.path;
+        const skipped = ['Tezcat', 'Clippings']
+        for (const skip of skipped) {
+            if (path?.startsWith(skip + '/')) {
+                return builder.finish()
+            }
+        }
 
         // Check if the file is inside excluded folders
         const excludedFolders = this.settings.excludedDirectoriesForLinking;
         if (excludedFolders.length > 0) {
-            const path = mappedFile?.parent?.path ?? this.app.workspace.getActiveFile()?.parent?.path;
             if (excludedFolders.includes(path ?? '')) return builder.finish();
         }
 
